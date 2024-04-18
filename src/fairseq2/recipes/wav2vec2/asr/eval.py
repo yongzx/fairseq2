@@ -65,7 +65,7 @@ class Wav2Vec2AsrEvalConfig:
     """The name of the wav2vec 2.0 ASR model to evaluate."""
 
     checkpoint_dir: Optional[Path] = None
-    """The checkpoint directory containing models saved by a :class:`FileCheckpointManager`."""
+    """The checkpoint directory containing models saved by :class:`FileCheckpointManager`."""
 
     dtype: DataType = torch.float16
     """The data type of the model."""

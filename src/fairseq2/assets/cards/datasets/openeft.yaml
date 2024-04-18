@@ -6,3 +6,9 @@
 
 name: openeft
 dataset_family: generic_instruction
+
+---
+
+name: oa2_gsm8k_safety
+dataset_family: generic_instruction
+data: "/fsx-ram/kulikov/openeft/oa2_gsm8k_safety/"

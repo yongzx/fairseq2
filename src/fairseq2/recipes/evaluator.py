@@ -138,7 +138,7 @@ class StandardEvaluator(Evaluator, Generic[BatchT]):
 
     def _do_run(self) -> None:
         with create_rich_progress() as progress:
-            eval_task = progress.add_task("eval", total=None)
+            task = progress.add_task("eval", total=None)
 
             watch = Stopwatch(start=True, device=self._root_gang.device)
 
@@ -150,7 +150,7 @@ class StandardEvaluator(Evaluator, Generic[BatchT]):
                 except StopIteration:
                     break
 
-                progress.update(eval_task, refresh=True, advance=1)
+                progress.update(task, advance=1)
 
                 log.debug("Running step {}.", step_nr)
 

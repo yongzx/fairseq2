@@ -150,11 +150,6 @@ class ChatbotCommand(CliCommandHandler):
 
         log.info("Tokenizer loaded.")
 
-        rng_bag = RngBag.from_device_defaults(CPU, root_gang.device)
-
-        # Set the seed for sequence generation.
-        rng_bag.manual_seed(args.seed)
-
         sampler = TopPSampler(p=args.top_p)
 
         generator = SamplingSequenceGenerator(
@@ -166,6 +161,11 @@ class ChatbotCommand(CliCommandHandler):
         self._do_run(args.model_name, chatbot, root_gang)
 
     def _do_run(self, chatbot_name: str, chatbot: Chatbot, gang: Gang) -> None:
+        rng_bag = RngBag.from_device_defaults(CPU, root_gang.device)
+
+        # Set the seed for sequence generation.
+        rng_bag.manual_seed(args.seed)
+
         dialog = []
 
         if gang.rank == 0:

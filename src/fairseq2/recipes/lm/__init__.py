@@ -15,6 +15,10 @@ from fairseq2.recipes.lm.instruction_finetune import (
 from fairseq2.recipes.lm.instruction_finetune import (
     load_instruction_finetuner as load_instruction_finetuner,
 )
+from fairseq2.recipes.lm.text_complete import load_text_completer as load_text_completer
+from fairseq2.recipes.lm.text_complete import (
+    text_complete_presets as text_complete_presets,
+)
 
 
 def _setup_lm_cli(cli: Cli) -> None:
@@ -26,7 +30,7 @@ def _setup_lm_cli(cli: Cli) -> None:
         help="run a terminal-based chatbot demo",
     )
 
-    handler = RecipeCommandHandler(
+    instruction_finetune_handler = RecipeCommandHandler(
         loader=load_instruction_finetuner,
         preset_configs=instruction_finetune_presets,
         default_preset="llama3_8b_instruct",
@@ -34,6 +38,18 @@ def _setup_lm_cli(cli: Cli) -> None:
 
     group.add_command(
         "instruction_finetune",
-        handler,
+        instruction_finetune_handler,
         help="instruction-finetune a Language Model",
+    )
+
+    text_complete_handler = RecipeCommandHandler(
+        loader=load_text_completer,
+        preset_configs=text_complete_presets,
+        default_preset="llama3_8b_instruct",
+    )
+
+    group.add_command(
+        "text_complete",
+        text_complete_handler,
+        help="complete text prompts",
     )

@@ -408,7 +408,7 @@ class StandardTrainer(StatefulObjectBag, Trainer, Generic[BatchT]):
             while self._should_step():
                 self._step_nr += 1
 
-                self._progress.update(train_task, refresh=True, advance=1)
+                self._progress.update(train_task, advance=1)
 
                 detect_anomaly = torch.autograd.set_detect_anomaly(  # type: ignore[attr-defined]
                     self._anomaly_detection, check_nan=True
@@ -642,7 +642,7 @@ class StandardTrainer(StatefulObjectBag, Trainer, Generic[BatchT]):
         valid_task = self._progress.add_task("valid", total=None, completed=0)
 
         for step_nr in count(start=1):
-            self._progress.update(valid_task, refresh=True, advance=1)
+            self._progress.update(valid_task, advance=1)
 
             log.debug("Running validation step {}.", step_nr)
 

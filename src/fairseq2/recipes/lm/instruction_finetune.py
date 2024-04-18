@@ -49,7 +49,7 @@ class InstructionFinetuneConfig:
     """Holds the configuration of an instruction-finetuning recipe."""
 
     dataset_name: str = "openeft"  # TODO: change!
-    """The dataset to train with. Should match the fairseq2 asset name."""
+    """The dataset to train with."""
 
     tokenizer_name: str = "llama3_instruct"
     """The tokenizer to use."""
@@ -316,7 +316,7 @@ def load_instruction_finetuner(
         final_lr=config.lr * config.final_lr_ratio,
     )
 
-    # Set up the finetuner.
+    # Initialize the trainer.
     return StandardTrainer[SequenceBatch](
         criterion=criterion,
         gang=root_gang,

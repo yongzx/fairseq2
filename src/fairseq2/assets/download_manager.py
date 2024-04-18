@@ -188,11 +188,11 @@ class _AssetDownloadOp:
     _cache_dir: Path
     _uri: str
     _uri_params: Dict[str, str]
+    _shard_idx: Optional[int]
     _asset_dir: Optional[Path]
     _display_name: str
     _force: bool
     _progress: bool
-    _shard_idx: Optional[int]
 
     def __init__(
         self,
@@ -206,11 +206,11 @@ class _AssetDownloadOp:
         self._cache_dir = cache_dir
         self._uri = uri
         self._uri_params = {}
+        self._shard_idx = shard_idx
         self._asset_dir = None
         self._display_name = display_name
         self._force = force
         self._progress = progress
-        self._shard_idx = shard_idx
 
     def run(self) -> Path:
         self._process_uri()
