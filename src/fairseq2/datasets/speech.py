@@ -6,7 +6,7 @@
 
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Dict, List, Set, cast, final
+from typing import Any, Dict, List, Set, final
 
 import numpy as np
 import torch
@@ -14,26 +14,13 @@ from torch import Tensor
 from torch.nn.functional import layer_norm
 
 from fairseq2.assets import AssetCard
-from fairseq2.data import (
-    CollateOptionsOverride,
-    Collater,
-    DataPipeline,
-    DataPipelineBuilder,
-    FileMapper,
-    SequenceData,
-    create_bucket_sizes,
-    read_sequence,
-)
+from fairseq2.data import Collater, DataPipelineBuilder, FileMapper, create_bucket_sizes
 from fairseq2.data.audio import AudioDecoder
-from fairseq2.data.text import (
-    StrSplitter,
-    read_text,
-)
+from fairseq2.data.text import StrSplitter, read_text
 from fairseq2.datasets.data_reader import DataPipelineReader, DataReader
 from fairseq2.datasets.error import DatasetError
 from fairseq2.datasets.loader import AbstractDatasetLoader, DelegatingDatasetLoader
 from fairseq2.gang import Gang
-from fairseq2.nn.padding import get_seqs_and_padding_mask
 from fairseq2.typing import DataType, override
 
 
@@ -221,22 +208,26 @@ class GenericSpeechDataset(SpeechDataset):
             builder.map(normalize, selector="[*].audio.data.waveform")
 
         def crop_batches(batch: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-            min_audio_len_batch = min((item["audio"]["data"]["waveform"].size(0) for item in batch))
+            min_audio_len_batch = min(
+                (item["audio"]["data"]["waveform"].size(0) for item in batch)
+            )
             crop_size = min(max_audio_len, min_audio_len_batch)
 
             def crop_waveform(audio: Tensor, crop_size: int) -> Tensor:
                 size = audio.size(0)
                 diff = size - crop_size
-                
+
                 if diff <= 0:
                     return audio
-                
+
                 start = np.random.randint(0, diff + 1)
 
                 return audio[start : start + crop_size]
 
             for item in batch:
-                item["audio"]["data"]["waveform"] = crop_waveform(item["audio"]["data"]["waveform"], crop_size)
+                item["audio"]["data"]["waveform"] = crop_waveform(
+                    item["audio"]["data"]["waveform"], crop_size
+                )
 
             return batch
 
