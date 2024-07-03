@@ -14,7 +14,13 @@ from torch import Tensor
 from torch.nn.functional import layer_norm
 
 from fairseq2.assets import AssetCard
-from fairseq2.data import Collater, DataPipelineBuilder, FileMapper, create_bucket_sizes
+from fairseq2.data import (
+    Collater,
+    DataPipelineBuilder,
+    FileMapper,
+    create_bucket_sizes,
+    read_sequence,
+)
 from fairseq2.data.audio import AudioDecoder
 from fairseq2.data.text import StrSplitter, read_text
 from fairseq2.datasets.data_reader import DataPipelineReader, DataReader
@@ -149,13 +155,32 @@ class GenericSpeechDataset(SpeechDataset):
 
         root_data_dir = self._retrieve_data_directory(split)
 
-        builder = self._builder_from_manifest(split)
+        builder = self._builder_from_manifest(split, max_audio_len)
 
-        # Shuffle examples. Must be consistent across all processes.
-        if example_shuffle_window != 1:
-            builder.shuffle(example_shuffle_window, seed)
+        # TODO: Remove this hack which is done just to get parity with fairseq1's dataloader.
+        def fairseq1_hack(builder: DataPipelineBuilder) -> DataPipelineBuilder:
+            manifest = list(builder.and_return())
+            manifest = list(
+                filter(
+                    lambda sample: int(sample["audio_size"]) >= min_audio_len, manifest
+                )
+            )
+            sizes = np.array([int(sample["audio_size"]) for sample in manifest])
+            random_order = np.random.permutation(len(sizes))
+            # random_order = np.arange(len(sizes))
+            limited_sizes = np.minimum(sizes, max_audio_len)
+            indices = np.lexsort((random_order, limited_sizes))[::-1]
+            sorted_manifest = [manifest[idx] for idx in indices]
+            return read_sequence(sorted_manifest)
 
-        seed += 1
+        builder = fairseq1_hack(builder)
+
+        # TODO: Add this back once we remove fairseq1_hack.
+        # # Shuffle examples. Must be consistent across all processes.
+        # if example_shuffle_window != 1:
+        #     builder.shuffle(example_shuffle_window, seed)
+
+        # seed += 1
 
         # Shard.
         builder.shard(gang.rank, gang.size, allow_uneven=True)
@@ -163,10 +188,9 @@ class GenericSpeechDataset(SpeechDataset):
         seed += gang.rank
 
         # Bucket by audio length.
-        # We allow audios greater than max_audio_len since we crop them later manually.
         bucket_sizes = create_bucket_sizes(
             max_num_elements=max_num_elements,
-            max_seq_len=max_num_elements,
+            max_seq_len=max_audio_len,
             min_seq_len=min_audio_len,
             num_seqs_multiple_of=8,
         )
@@ -176,7 +200,7 @@ class GenericSpeechDataset(SpeechDataset):
             selector="audio_size",
             min_data_len=min_audio_len,
             skip_below_min_examples=True,
-            skip_above_max_examples=False,
+            skip_above_max_examples=True,
         )
 
         # Shuffle buckets.
@@ -207,31 +231,27 @@ class GenericSpeechDataset(SpeechDataset):
         if normalize_audio:
             builder.map(normalize, selector="[*].audio.data.waveform")
 
-        def crop_batches(batch: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        def crop_audios_in_batch(batch: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             min_audio_len_batch = min(
                 (item["audio"]["data"]["waveform"].size(0) for item in batch)
             )
             crop_size = min(max_audio_len, min_audio_len_batch)
 
-            def crop_waveform(audio: Tensor, crop_size: int) -> Tensor:
+            def crop_audio(audio: Tensor, crop_size: int) -> Tensor:
                 size = audio.size(0)
-                diff = size - crop_size
-
-                if diff <= 0:
-                    return audio
-
-                start = np.random.randint(0, diff + 1)
-
-                return audio[start : start + crop_size]
+                if size > crop_size:
+                    start = np.random.randint(0, size - crop_size + 1)
+                    return audio[start : start + crop_size]
+                return audio
 
             for item in batch:
-                item["audio"]["data"]["waveform"] = crop_waveform(
+                item["audio"]["data"]["waveform"] = crop_audio(
                     item["audio"]["data"]["waveform"], crop_size
                 )
 
             return batch
 
-        builder.map(crop_batches)
+        builder.map(crop_audios_in_batch)
 
         collater = Collater()
 
@@ -240,7 +260,13 @@ class GenericSpeechDataset(SpeechDataset):
         # Prefetch `num_prefetch` examples in background.
         builder.prefetch(num_prefetch)
 
-        pipeline = builder.map(lambda x: x["audio"]["data"]["waveform"]).and_return()
+        def example_to_batch(example: Dict[str, Any]) -> Tensor:
+            seqs = example["audio"]["data"]["waveform"]
+            if gang.device is not None:
+                seqs = seqs.to(gang.device)
+            return seqs
+
+        pipeline = builder.map(example_to_batch).and_return()
 
         return DataPipelineReader[Tensor](
             pipeline,
@@ -268,7 +294,9 @@ class GenericSpeechDataset(SpeechDataset):
                 f"The first line of the manifest file '{tsv_file}' of the {self._dataset_name} dataset must point to a data directory."
             )
 
-    def _builder_from_manifest(self, split: str) -> DataPipelineBuilder:
+    def _builder_from_manifest(
+        self, split: str, max_audio_len: int
+    ) -> DataPipelineBuilder:
         tsv_file = self._manifest_dir.joinpath(f"{split}.tsv")
 
         builder = read_text(tsv_file, rtrim=True, memory_map=True)
@@ -279,8 +307,12 @@ class GenericSpeechDataset(SpeechDataset):
 
         builder.map(field_splitter, num_parallel_calls=npc)
 
-        # Cast audio size to integer.
-        builder.map(int, selector="audio_size")
+        # Manually change "audio_size" to audios longer than max_audio_len to max_audio_len.
+        # This is done so that we can create buckets without error. We will anyway crop these audios.
+        def cap_audio_size(audio_size: str) -> int:
+            return min(max_audio_len, int(audio_size))
+
+        builder.map(cap_audio_size, selector="audio_size")
 
         # TODO: Use `cache()` op.
         return builder
