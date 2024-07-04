@@ -167,7 +167,6 @@ class GenericSpeechDataset(SpeechDataset):
             )
             sizes = np.array([int(sample["audio_size"]) for sample in manifest])
             random_order = np.random.permutation(len(sizes))
-            # random_order = np.arange(len(sizes))
             limited_sizes = np.minimum(sizes, max_audio_len)
             indices = np.lexsort((random_order, limited_sizes))[::-1]
             sorted_manifest = [manifest[idx] for idx in indices]
@@ -314,7 +313,6 @@ class GenericSpeechDataset(SpeechDataset):
 
         builder.map(cap_audio_size, selector="audio_size")
 
-        # TODO: Use `cache()` op.
         return builder
 
     @override
