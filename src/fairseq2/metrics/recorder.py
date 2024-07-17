@@ -46,6 +46,10 @@ def format_as_float(value: Any, *, postfix: Optional[str] = None) -> str:
 
 _metric_formatters: Dict[str, Tuple[str, int, Callable[[Any], str]]] = {
     # fmt: off
+    "loss":                      ("Loss",                            100, format_as_float),
+    "contrastive_loss":          ("Contrastive Loss",                110, format_as_float),
+    "diversity_loss":            ("Diversity Loss",                  120, format_as_float),
+    "feature_penalty":           ("Feature Penalty",                 130, format_as_float),
     "ctc_loss":                  ("CTC Loss",                        100, format_as_float),
     "nll_loss":                  ("NLL Loss",                        100, format_as_float),
     "uer":                       ("Unit Error Rate (UER)",           200, format_as_float),

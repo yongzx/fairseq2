@@ -333,18 +333,18 @@ class Wav2Vec2TrainUnit(AbstractTrainUnit[Tensor]):
         self._metric_bag = Wav2Vec2MetricBag(gang)
 
     @override
-    def __call__(self, seqs: Tensor) -> Tuple[Tensor, int]:
-        batch = SequenceBatch(seqs, None)
+    def __call__(self, batch: Tensor) -> Tuple[Tensor, int]:
+        input_batch = SequenceBatch(batch, None)
 
-        output = self._model(batch)
+        output = self._model(input_batch)
 
         loss = output.compute_loss()
 
-        self._metric_bag.update_loss(batch, loss.detach())
+        self._metric_bag.update_losses(input_batch, loss.detach())
 
-        self._metric_bag.update_batch_metrics(batch)
+        self._metric_bag.update_batch_metrics(input_batch)
 
-        return loss.total, batch.batch_size
+        return loss.total, input_batch.batch_size
 
     @property
     @override

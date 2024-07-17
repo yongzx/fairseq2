@@ -9,10 +9,10 @@ from __future__ import annotations
 import math
 
 import torch
-from torcheval.metrics import Mean, Sum
 
 from fairseq2.gang import Gang
 from fairseq2.metrics import MetricBag
+from fairseq2.metrics.aggregation import Mean, Sum
 from fairseq2.models.sequence import SequenceBatch
 from fairseq2.models.wav2vec2 import Wav2Vec2Loss
 
@@ -21,6 +21,9 @@ class Wav2Vec2MetricBag(MetricBag):
     """Holds the training metrics of a wav2vec 2.0 model."""
 
     _loss: Mean
+    _contrastive_loss: Mean
+    _diversity_loss: Mean
+    _feature_penalty: Mean
     _batch_size: Mean
     _elements_per_batch: Mean
     _num_examples: Sum
@@ -39,6 +42,12 @@ class Wav2Vec2MetricBag(MetricBag):
 
         self.register_metric("_loss", Mean(device=d), persistent=False)
 
+        self.register_metric("_contrastive_loss", Mean(device=d), persistent=False)
+
+        self.register_metric("_diversity_loss", Mean(device=d), persistent=False)
+
+        self.register_metric("_feature_penalty", Mean(device=d), persistent=False)
+
         self.register_metric("_batch_size", Mean(device=d), persistent=False)
 
         self.register_metric("_elements_per_batch", Mean(device=d), persistent=False)
@@ -52,19 +61,30 @@ class Wav2Vec2MetricBag(MetricBag):
         self._total_num_source_elements = Sum(device=d)
 
     @torch.inference_mode()
-    def update_loss(self, batch: SequenceBatch, loss: Wav2Vec2Loss) -> None:
-        """Update the loss metric.
+    def update_losses(self, batch: SequenceBatch, loss: Wav2Vec2Loss) -> None:
+        """Update the loss metrics.
 
         :param batch:
             The batch processed by the model.
         :param loss:
             The loss of ``batch``.
         """
-        batch_size = torch.tensor(batch.batch_size)
+        self._loss.update(
+            loss.total / batch.batch_size / math.log(2), weight=batch.batch_size
+        )
 
-        normalized_loss = loss.total.cpu() / batch_size / math.log(2)
+        self._contrastive_loss.update(
+            loss.contrastive / batch.batch_size / math.log(2), weight=batch.batch_size
+        )
 
-        self._loss.update(normalized_loss, weight=batch_size)
+        self._diversity_loss.update(
+            loss.diversity / batch.batch_size / math.log(2), weight=batch.batch_size
+        )
+
+        self._feature_penalty.update(
+            loss.feature_penalty / batch.batch_size / math.log(2),
+            weight=batch.batch_size,
+        )
 
     @torch.inference_mode()
     def update_batch_metrics(self, batch: SequenceBatch) -> None:
@@ -73,9 +93,9 @@ class Wav2Vec2MetricBag(MetricBag):
         :param seqs:
             The batch of seqs processed by the model.
         """
-        batch_size = torch.tensor(batch.batch_size)
+        batch_size = batch.batch_size
 
-        num_source_elements = torch.tensor(batch.num_elements())
+        num_source_elements = batch.num_elements()
 
         self._batch_size.update(batch_size * self._gang.size)
 

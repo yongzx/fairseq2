@@ -437,6 +437,7 @@ class Wav2Vec2Loss:
     """The diversity loss. *Shape:* :math:`()`."""
 
     feature_penalty: Tensor
+    """Feature penalty for regularization."""
 
     def detach(self) -> Wav2Vec2Loss:
         """Return a copy detached from the autograd graph."""
