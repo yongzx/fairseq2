@@ -124,14 +124,18 @@ class Wav2Vec2Model(Model):
         :param batch:
             The batch of sequences to process.
         """
-        seqs, padding_mask, targets, temporal_mask = self.run_frontend(
+        seqs, padding_mask, targets, temporal_mask, feature_penalty = self.run_frontend(
             batch.seqs, batch.padding_mask
         )
 
         encoder_output, encoder_padding_mask = self.encoder(seqs, padding_mask)
 
         return Wav2Vec2Features(
-            encoder_output, encoder_padding_mask, targets, temporal_mask
+            encoder_output,
+            encoder_padding_mask,
+            targets,
+            temporal_mask,
+            feature_penalty,
         )
 
     def run_frontend(
@@ -165,7 +169,9 @@ class Wav2Vec2Model(Model):
         """
         frontend = self.encoder_frontend
 
-        seqs, padding_mask = frontend.extract_features(seqs, padding_mask)
+        seqs, padding_mask, feature_penalty = frontend.extract_features(
+            seqs, padding_mask
+        )
 
         # We use the extracted features as context network targets after masking
         # and quantization.
@@ -182,7 +188,7 @@ class Wav2Vec2Model(Model):
 
         targets = extract_masked_elements(targets, temporal_mask)
 
-        return seqs, padding_mask, targets, temporal_mask
+        return seqs, padding_mask, targets, temporal_mask, feature_penalty
 
     def quantize_and_contrast(self, features: Wav2Vec2Features) -> Wav2Vec2Output:
         """Quantize targets and produce logits for contrastive prediction.
@@ -216,6 +222,7 @@ class Wav2Vec2Model(Model):
             quantizer_output,
             encoder_output,
             encoder_padding_mask,
+            features.feature_penalty,
         )
 
     def _sample_distractors(self, targets: Tensor) -> Tensor:
@@ -323,6 +330,8 @@ class Wav2Vec2Features:
     targets. *Shape:* :math:`(N,S_{enc})`, where :math:`N` is the batch size and
     :math`S_{enc}` is the encoder output sequence length."""
 
+    feature_penalty: Tensor
+
 
 @final
 @dataclass
@@ -359,7 +368,14 @@ class Wav2Vec2Output:
     where :math:`N` is the batch size and :math:`S_{enc}` is the encoder output
     sequence length."""
 
-    def compute_loss(self, *, diversity_loss_weight: float = 0.1) -> Wav2Vec2Loss:
+    feature_penalty: Tensor
+
+    def compute_loss(
+        self,
+        *,
+        diversity_loss_weight: float = 0.1,
+        feature_penalty_weight: float = 10.0,
+    ) -> Wav2Vec2Loss:
         """Compute the loss.
 
         :param diversity_loss_weight:
@@ -369,9 +385,17 @@ class Wav2Vec2Output:
 
         diversity_loss = self.compute_diversity_loss()
 
-        total_loss = contrastive_loss + diversity_loss_weight * diversity_loss
+        feature_penalty = self.compute_feature_penalty()
 
-        return Wav2Vec2Loss(total_loss, contrastive_loss, diversity_loss)
+        total_loss = (
+            contrastive_loss
+            + diversity_loss_weight * diversity_loss
+            + feature_penalty_weight * feature_penalty
+        )
+
+        return Wav2Vec2Loss(
+            total_loss, contrastive_loss, diversity_loss, feature_penalty
+        )
 
     def compute_contrastive_loss(self) -> Tensor:
         """Compute the contrastive loss."""
@@ -391,6 +415,12 @@ class Wav2Vec2Output:
 
         return self.quantizer_output.compute_loss() * batch_size * seq_len
 
+    def compute_feature_penalty(self) -> Tensor:
+        """Compute the diversity loss."""
+        batch_size, seq_len = self.logits.shape[:2]
+
+        return self.feature_penalty * batch_size * seq_len
+
 
 @final
 @dataclass
@@ -406,8 +436,13 @@ class Wav2Vec2Loss:
     diversity: Tensor
     """The diversity loss. *Shape:* :math:`()`."""
 
+    feature_penalty: Tensor
+
     def detach(self) -> Wav2Vec2Loss:
         """Return a copy detached from the autograd graph."""
         return Wav2Vec2Loss(
-            self.total.detach(), self.contrastive.detach(), self.diversity.detach()
+            self.total.detach(),
+            self.contrastive.detach(),
+            self.diversity.detach(),
+            self.feature_penalty.detach(),
         )

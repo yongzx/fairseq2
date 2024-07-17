@@ -129,7 +129,7 @@ class Wav2Vec2Frontend(TransformerFrontend):
                 "`Wav2Vec2Frontend` does not support incremental decoding."
             )
 
-        seqs, padding_mask = self.extract_features(seqs, padding_mask)
+        seqs, padding_mask, _ = self.extract_features(seqs, padding_mask)
 
         seqs, padding_mask, _ = self.process_features(seqs, padding_mask)
 
@@ -137,7 +137,7 @@ class Wav2Vec2Frontend(TransformerFrontend):
 
     def extract_features(
         self, seqs: Tensor, padding_mask: Optional[PaddingMask]
-    ) -> Tuple[Tensor, Optional[PaddingMask]]:
+    ) -> Tuple[Tensor, Optional[PaddingMask], Tensor]:
         """Extract features from the specified sequences.
 
         :param seqs:
@@ -161,9 +161,11 @@ class Wav2Vec2Frontend(TransformerFrontend):
         if self.feature_extractor is not None:
             seqs, padding_mask = self.feature_extractor(seqs, padding_mask)
 
+        feature_penalty = seqs.float().pow(2).mean()
+
         seqs = self.post_extract_layer_norm(seqs)
 
-        return seqs, padding_mask
+        return seqs, padding_mask, feature_penalty
 
     def process_features(
         self,

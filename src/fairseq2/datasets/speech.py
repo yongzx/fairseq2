@@ -157,8 +157,10 @@ class GenericSpeechDataset(SpeechDataset):
 
         builder = self._builder_from_manifest(split, max_audio_len)
 
-        # TODO: Remove this hack which is done just to get parity with fairseq1's dataloader.
-        def fairseq1_hack(builder: DataPipelineBuilder) -> DataPipelineBuilder:
+        # TODO: Remove this, which is done just to get parity with fairseq1's dataloader.
+        def reorder_as_per_fairseq1(
+            builder: DataPipelineBuilder,
+        ) -> DataPipelineBuilder:
             manifest = list(builder.and_return())
             manifest = list(
                 filter(
@@ -172,19 +174,14 @@ class GenericSpeechDataset(SpeechDataset):
             sorted_manifest = [manifest[idx] for idx in indices]
             return read_sequence(sorted_manifest)
 
-        builder = fairseq1_hack(builder)
+        builder = reorder_as_per_fairseq1(builder)
 
-        # TODO: Add this back once we remove fairseq1_hack.
+        # TODO: Add this back once we remove reorder_as_per_fairseq1.
         # # Shuffle examples. Must be consistent across all processes.
         # if example_shuffle_window != 1:
         #     builder.shuffle(example_shuffle_window, seed)
 
         # seed += 1
-
-        # Shard.
-        builder.shard(gang.rank, gang.size, allow_uneven=True)
-
-        seed += gang.rank
 
         # Bucket by audio length.
         bucket_sizes = create_bucket_sizes(
@@ -207,6 +204,11 @@ class GenericSpeechDataset(SpeechDataset):
             builder.shuffle(batch_shuffle_window, seed)
 
         seed += 1
+
+        # Shard.
+        builder.shard(gang.rank, gang.size, allow_uneven=True)
+
+        seed += gang.rank
 
         # Memory map audio files.
         file_mapper = FileMapper(root_data_dir, cached_fd_count=cached_fd_count)

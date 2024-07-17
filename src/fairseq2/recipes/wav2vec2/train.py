@@ -137,16 +137,13 @@ class Wav2Vec2TrainConfig:
     max_num_data_epochs: Optional[int] = None
     """The maximum number of data epochs to train for."""
 
-    validate_every_n_steps: int = 1000
+    validate_every_n_steps: int = 10_000
     """The step interval at which to validate the model."""
-
-    checkpoint_after_n_steps: int = 0
-    """The number of steps after which to start checkpointing."""
 
     checkpoint_every_n_steps: int = 25_000
     """The step interval at which to checkpoint."""
 
-    publish_metrics_every_n_steps: int = 1000
+    publish_metrics_every_n_steps: int = 200
     """The step interval at which to publish metrics."""
 
     # Misc
@@ -232,7 +229,7 @@ def load_wav2vec2_trainer(
     )
 
     if config.torch_compile:
-        model.encoder = compile_model(model.encoder, log)  # type: ignore[assignment]
+        dp_model.encoder = compile_model(dp_model.encoder, log)  # type: ignore[assignment]
 
     log_model(dp_model, log, rank=gang.rank)
 
@@ -300,7 +297,7 @@ def load_wav2vec2_trainer(
         validate_after_n_steps=0,
         validate_every_n_steps=config.validate_every_n_steps,
         checkpoint_manager=checkpoint_manager,
-        checkpoint_after_n_steps=config.checkpoint_after_n_steps,
+        checkpoint_after_n_steps=0,
         checkpoint_every_n_steps=config.checkpoint_every_n_steps,
         tb_dir=output_dir.joinpath("tb"),
         publish_metrics_every_n_steps=config.publish_metrics_every_n_steps,
