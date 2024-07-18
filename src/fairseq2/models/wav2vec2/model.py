@@ -42,6 +42,8 @@ class Wav2Vec2Model(Model):
     final_target_proj: Linear
     num_distractors: int
     logit_temp: float
+    diversity_loss_weight: float
+    feature_penalty_weight: float
 
     def __init__(
         self,
@@ -54,6 +56,8 @@ class Wav2Vec2Model(Model):
         final_proj_bias: bool = True,
         num_distractors: int = 100,
         logit_temp: float = 0.1,
+        diversity_loss_weight: float = 0.1,
+        feature_penalty_weight: float = 10.0,
         device: Optional[Device] = None,
         dtype: Optional[DataType] = None,
     ) -> None:
@@ -108,6 +112,8 @@ class Wav2Vec2Model(Model):
 
         self.num_distractors = num_distractors
         self.logit_temp = logit_temp
+        self.diversity_loss_weight = diversity_loss_weight
+        self.feature_penalty_weight = feature_penalty_weight
 
     def forward(self, batch: SequenceBatch) -> Wav2Vec2Output:
         """
@@ -223,6 +229,8 @@ class Wav2Vec2Model(Model):
             encoder_output,
             encoder_padding_mask,
             features.feature_penalty,
+            diversity_loss_weight=self.diversity_loss_weight,
+            feature_penalty_weight=self.feature_penalty_weight,
         )
 
     def _sample_distractors(self, targets: Tensor) -> Tensor:
@@ -370,12 +378,11 @@ class Wav2Vec2Output:
 
     feature_penalty: Tensor
 
-    def compute_loss(
-        self,
-        *,
-        diversity_loss_weight: float = 0.1,
-        feature_penalty_weight: float = 10.0,
-    ) -> Wav2Vec2Loss:
+    diversity_loss_weight: float = 0.1
+
+    feature_penalty_weight: float = 10.0
+
+    def compute_loss(self) -> Wav2Vec2Loss:
         """Compute the loss.
 
         :param diversity_loss_weight:
@@ -387,11 +394,7 @@ class Wav2Vec2Output:
 
         feature_penalty = self.compute_feature_penalty()
 
-        total_loss = (
-            contrastive_loss
-            + diversity_loss_weight * diversity_loss
-            + feature_penalty_weight * feature_penalty
-        )
+        total_loss = contrastive_loss + diversity_loss + feature_penalty
 
         return Wav2Vec2Loss(
             total_loss, contrastive_loss, diversity_loss, feature_penalty
@@ -413,13 +416,18 @@ class Wav2Vec2Output:
         """Compute the diversity loss."""
         batch_size, seq_len = self.logits.shape[:2]
 
-        return self.quantizer_output.compute_loss() * batch_size * seq_len
+        return (
+            self.diversity_loss_weight
+            * self.quantizer_output.compute_loss()
+            * batch_size
+            * seq_len
+        )
 
     def compute_feature_penalty(self) -> Tensor:
         """Compute the diversity loss."""
         batch_size, seq_len = self.logits.shape[:2]
 
-        return self.feature_penalty * batch_size * seq_len
+        return self.feature_penalty_weight * self.feature_penalty * batch_size * seq_len
 
 
 @final

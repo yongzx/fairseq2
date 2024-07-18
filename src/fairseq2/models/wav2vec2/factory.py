@@ -210,6 +210,10 @@ class Wav2Vec2Config:
     logit_temp: float = 0.1
     """The temperature to divide logits by."""
 
+    diversity_loss_weight: float = 0.1
+
+    feature_penalty_weight: float = 10.0
+
 
 class Wav2Vec2EncoderBuilder:
     """Builds modules of a wav2vec 2.0 encoder as described in
@@ -483,6 +487,8 @@ class Wav2Vec2Builder:
             final_proj_bias=self._config.final_proj_bias,
             num_distractors=self._config.num_distractors,
             logit_temp=self._config.logit_temp,
+            diversity_loss_weight=self._config.diversity_loss_weight,
+            feature_penalty_weight=self._config.feature_penalty_weight,
             device=self._device,
             dtype=self._dtype,
         )

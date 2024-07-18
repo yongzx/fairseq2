@@ -14,7 +14,7 @@ from torch.nn import Module
 from fairseq2.gang import Gang
 from fairseq2.logging import get_log_writer
 from fairseq2.models.sequence import SequenceBatch
-from fairseq2.models.wav2vec2 import Wav2Vec2Model
+from fairseq2.models.wav2vec2 import Wav2Vec2Model, Wav2Vec2Output
 from fairseq2.recipes.evaluator import AbstractEvalUnit
 from fairseq2.recipes.utils.setup import check_model_type
 from fairseq2.recipes.wav2vec2.common import Wav2Vec2MetricBag
@@ -52,13 +52,24 @@ class Wav2Vec2EvalUnit(AbstractEvalUnit[Tensor]):
     def __call__(self, batch: Tensor) -> None:
         input_batch = SequenceBatch(batch, None)
 
-        output = self._model(input_batch)
+        output = self._forward(input_batch)
+
+        batch_size, seq_len, _ = output.logits.shape
+
+        num_targets = batch_size * seq_len
 
         loss = output.compute_loss()
 
-        self._metric_bag.update_losses(input_batch, loss.detach())
+        self._metric_bag.update_losses(loss.detach(), num_targets)
 
-        self._metric_bag.update_batch_metrics(input_batch)
+        self._metric_bag.update_accuracy(output.logits)
+
+        self._metric_bag.update_quantizer_metrics(output.quantizer_output)
+
+        self._metric_bag.update_batch_metrics(input_batch, num_targets)
+
+    def _forward(self, batch: SequenceBatch) -> Wav2Vec2Output:
+        return self._model(batch)  # type: ignore[no-any-return]
 
     @property
     @override

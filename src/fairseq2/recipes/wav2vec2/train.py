@@ -24,6 +24,7 @@ from fairseq2.models.sequence import SequenceBatch
 from fairseq2.models.wav2vec2 import (
     Wav2Vec2Config,
     Wav2Vec2Model,
+    Wav2Vec2Output,
     create_wav2vec2_model,
     wav2vec2_archs,
 )
@@ -336,15 +337,26 @@ class Wav2Vec2TrainUnit(AbstractTrainUnit[Tensor]):
     def __call__(self, batch: Tensor) -> Tuple[Tensor, int]:
         input_batch = SequenceBatch(batch, None)
 
-        output = self._model(input_batch)
+        output = self._forward(input_batch)
+
+        batch_size, seq_len, _ = output.logits.shape
+
+        num_targets = batch_size * seq_len
 
         loss = output.compute_loss()
 
-        self._metric_bag.update_losses(input_batch, loss.detach())
+        self._metric_bag.update_losses(loss.detach(), num_targets)
 
-        self._metric_bag.update_batch_metrics(input_batch)
+        self._metric_bag.update_accuracy(output.logits)
 
-        return loss.total, input_batch.batch_size
+        self._metric_bag.update_quantizer_metrics(output.quantizer_output)
+
+        self._metric_bag.update_batch_metrics(input_batch, num_targets)
+
+        return loss.total, num_targets
+
+    def _forward(self, batch: SequenceBatch) -> Wav2Vec2Output:
+        return self._model(batch)  # type: ignore[no-any-return]
 
     @property
     @override
