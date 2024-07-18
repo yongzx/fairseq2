@@ -78,7 +78,7 @@ class W2VBertModel(Model):
         :param batch:
             The batch of sequences to process.
         """
-        seqs, padding_mask, targets, temporal_mask = self.w2v2_model.run_frontend(
+        seqs, padding_mask, targets, temporal_mask, _ = self.w2v2_model.run_frontend(
             batch.seqs, batch.padding_mask
         )
 

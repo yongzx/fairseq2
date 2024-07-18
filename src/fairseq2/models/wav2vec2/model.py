@@ -146,7 +146,7 @@ class Wav2Vec2Model(Model):
 
     def run_frontend(
         self, seqs: Tensor, padding_mask: Optional[PaddingMask]
-    ) -> Tuple[Tensor, Optional[PaddingMask], Tensor, Tensor]:
+    ) -> Tuple[Tensor, Optional[PaddingMask], Tensor, Tensor, Tensor]:
         """Run the encoder frontend in pretraining mode.
 
         :param seqs:
