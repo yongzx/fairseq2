@@ -68,7 +68,7 @@ class Wav2Vec2EncoderConfig:
     use_fbank: bool = False
     """If ``True``, uses log-mel filterbanks instead of waveforms as input."""
 
-    first_pass_dropout_p: float = 0.1
+    first_pass_dropout_p: float = 0.0
     """The dropout probability on extracted features before masking and
     positional encoding."""
 

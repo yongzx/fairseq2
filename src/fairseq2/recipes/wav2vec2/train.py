@@ -168,7 +168,9 @@ wav2vec2_train_preset = wav2vec2_train_presets.decorator
 
 @wav2vec2_train_preset("base_960h")
 def _base_960h() -> Wav2Vec2TrainConfig:
-    return Wav2Vec2TrainConfig()
+    config = Wav2Vec2TrainConfig()
+    config.model_config = {"encoder_config": {"first_pass_dropout_p": 0.1}}
+    return config
 
 
 def load_wav2vec2_trainer(
