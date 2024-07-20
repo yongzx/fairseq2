@@ -5,7 +5,7 @@
 # LICENSE file in the root directory of this source tree.
 
 from abc import ABC, abstractmethod
-from typing import Optional, final
+from typing import Callable, Optional, final
 
 from torch import Tensor
 from torch.nn import Dropout, Module, ReLU, SiLU
@@ -72,6 +72,7 @@ class StandardFeedForwardNetwork(FeedForwardNetwork):
         inner_dropout_p: float = 0.0,
         norm_order: TransformerNormOrder = TransformerNormOrder.POST,
         layer_norm_factory: Optional[LayerNormFactory] = None,
+        proj_init_fn: Optional[Callable[[Linear], None]] = None,
         device: Optional[Device] = None,
         dtype: Optional[DataType] = None,
     ) -> None:
@@ -92,13 +93,17 @@ class StandardFeedForwardNetwork(FeedForwardNetwork):
             The Layer Normalization order.
         :param layer_norm_factory:
             The factory to construct the Layer Normalization module.
+        :proj_init_fn:
+            The initialization function for the inner, output projection layers.
         """
         super().__init__(model_dim)
 
         if layer_norm_factory is None:
             layer_norm_factory = create_standard_layer_norm
 
-        self.inner_proj = Linear(model_dim, inner_dim, bias, device=device, dtype=dtype)
+        self.inner_proj = Linear(
+            model_dim, inner_dim, bias, init_fn=proj_init_fn, device=device, dtype=dtype
+        )
 
         if inner_activation is None:
             self.inner_activation = ReLU()
@@ -118,7 +123,7 @@ class StandardFeedForwardNetwork(FeedForwardNetwork):
             self.register_module("inner_layer_norm", None)
 
         self.output_proj = Linear(
-            inner_dim, model_dim, bias, device=device, dtype=dtype
+            inner_dim, model_dim, bias, init_fn=proj_init_fn, device=device, dtype=dtype
         )
 
     @override

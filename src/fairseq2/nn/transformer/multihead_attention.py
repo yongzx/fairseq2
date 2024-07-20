@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections import OrderedDict
-from typing import Dict, MutableSequence, Optional, Protocol, Tuple, final
+from typing import Callable, Dict, MutableSequence, Optional, Protocol, Tuple, final
 
 import torch
 import torch.nn as nn
@@ -201,6 +201,7 @@ class StandardMultiheadAttention(MultiheadAttention):
         output_proj: Optional[Projection] = None,
         bias: bool = True,
         state_factory: Optional[AttentionStateFactory] = None,
+        proj_init_fn: Optional[Callable[[Linear], None]] = None,
         device: Optional[Device] = None,
         dtype: Optional[DataType] = None,
     ) -> None:
@@ -246,6 +247,8 @@ class StandardMultiheadAttention(MultiheadAttention):
         :param state_factory:
             The factory to construct :class:`AttentionState` instances for
             incremental decoding.
+        :param proj_init_fn:
+            The initialization function for all the projection layers.
         """
         super().__init__(model_dim, num_heads)
 
@@ -275,7 +278,7 @@ class StandardMultiheadAttention(MultiheadAttention):
                 model_dim,
                 model_dim,
                 bias,
-                init_fn=init_qkv_projection,
+                init_fn=proj_init_fn if proj_init_fn else init_qkv_projection,
                 device=device,
                 dtype=dtype,
             )
@@ -283,7 +286,7 @@ class StandardMultiheadAttention(MultiheadAttention):
                 self.kv_dim,
                 head_dim * self.num_key_value_heads,
                 bias,
-                init_fn=init_qkv_projection,
+                init_fn=proj_init_fn if proj_init_fn else init_qkv_projection,
                 device=device,
                 dtype=dtype,
             )
@@ -291,7 +294,7 @@ class StandardMultiheadAttention(MultiheadAttention):
                 self.kv_dim,
                 head_dim * self.num_key_value_heads,
                 bias,
-                init_fn=init_qkv_projection,
+                init_fn=proj_init_fn if proj_init_fn else init_qkv_projection,
                 device=device,
                 dtype=dtype,
             )
@@ -356,7 +359,7 @@ class StandardMultiheadAttention(MultiheadAttention):
                 v_dim,
                 model_dim,
                 bias,
-                init_fn=init_output_projection,
+                init_fn=proj_init_fn if proj_init_fn else init_output_projection,
                 device=device,
                 dtype=dtype,
             )

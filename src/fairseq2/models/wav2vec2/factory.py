@@ -7,6 +7,7 @@
 from dataclasses import dataclass, field
 from typing import Final, List, Optional, Tuple
 
+import torch.nn as nn
 from torch.nn import GELU, SiLU
 
 from fairseq2.models.conformer import ConformerBlock, ConformerConvolution
@@ -26,7 +27,7 @@ from fairseq2.models.wav2vec2.vector_quantizer import (
     GumbelVectorQuantizer,
     VectorQuantizer,
 )
-from fairseq2.nn import PositionEncoder, RotaryEncoder
+from fairseq2.nn import Linear, PositionEncoder, RotaryEncoder
 from fairseq2.nn.transformer import (
     SDPA,
     FeedForwardNetwork,
@@ -367,6 +368,7 @@ class Wav2Vec2EncoderBuilder:
 
     def build_attention(self) -> MultiheadAttention:
         """Build a Transformer multi-head attention layer."""
+
         if self._config.pos_encoder_type == "rotary":
             pos_encoder = RotaryEncoder(
                 self._config.model_dim // self._config.num_encoder_attn_heads,
@@ -383,6 +385,7 @@ class Wav2Vec2EncoderBuilder:
             self._config.num_encoder_attn_heads,
             pos_encoder=pos_encoder,
             sdpa=sdpa,
+            proj_init_fn=init_projection_bert,
             device=self._device,
             dtype=self._dtype,
         )
@@ -426,9 +429,17 @@ class Wav2Vec2EncoderBuilder:
             inner_activation=SiLU() if use_swish else GELU(),
             inner_dropout_p=self._config.ffn_inner_dropout_p,
             norm_order=self._config.norm_order,
+            proj_init_fn=init_projection_bert,
             device=self._device,
             dtype=self._dtype,
         )
+
+
+def init_projection_bert(proj: Linear) -> None:
+    nn.init.normal_(proj.weight, mean=0.0, std=0.02)
+
+    if proj.bias is not None:
+        nn.init.zeros_(proj.bias)
 
 
 class Wav2Vec2Builder:
