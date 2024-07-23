@@ -6,9 +6,9 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field, make_dataclass
 from pathlib import Path
-from typing import Literal, Optional, Tuple, Union, final
+from typing import Any, List, Literal, Optional, Tuple, Union, cast, final
 
 import torch
 import torch.distributed
@@ -28,6 +28,7 @@ from fairseq2.gang import Gang
 from fairseq2.logging import get_log_writer
 from fairseq2.models import load_model
 from fairseq2.models.decoder import DecoderModel
+from fairseq2.models.peft import apply_peft
 from fairseq2.models.sequence import (
     SequenceBatch,
     SequenceModelOutput,
@@ -47,7 +48,7 @@ from fairseq2.recipes.utils.setup import (
     setup_gangs,
     to_data_parallel,
 )
-from fairseq2.typing import META, DataType, override
+from fairseq2.typing import META, DataClass, DataType, is_dataclass_instance, override
 from fairseq2.utils.profiler import Stopwatch
 
 log = get_log_writer(__name__)
@@ -126,6 +127,10 @@ class InstructionFinetuneConfig:
     fp16_loss_scale: Tuple[float, float] = (128.0, 0.0001)
     """The initial and minimum loss scale for fp16 training."""
 
+    # PEFT
+    peft: PeftConfig = field(default_factory=lambda: peft_config())
+    """The configuration for parameter-efficient fine-tuning."""
+
     # Regime
     max_num_steps: int = 5000
     """The maximum number of steps to train for."""
@@ -161,6 +166,49 @@ class InstructionFinetuneConfig:
 
     anomaly_detection: bool = False
     """If ``True``, turns on anomaly detection feature in ``torch.autograd``."""
+
+
+@dataclass
+class PeftConfig:
+    """Holds the configuration for parameter-efficient finetuning."""
+
+    method: Optional[str] = None
+    """The PEFT method to train with."""
+
+    def get_config(self) -> DataClass:
+        """Return the configuration of the PEFT method specified in :attr:`method`."""
+        if self.method is None:
+            raise RuntimeError("`method` is `None`.")
+
+        try:
+            config = getattr(self, self.method)
+        except AttributeError:
+            config = None
+
+        if not is_dataclass_instance(config):
+            raise RuntimeError("`method` is not a valid PEFT method name.")
+
+        return config
+
+
+def peft_config() -> PeftConfig:
+    """Return a runtime-generated :class:`PeftConfig` instance."""
+    methods = apply_peft.methods
+
+    field_names = tuple(methods.keys())
+
+    # Override the `method` field with stricter `Literal[methods...]` type hint.
+    fields: List[Tuple[str, Any, Any]] = [
+        ("method", Optional[Literal[field_names]], field(default=None)),
+    ]
+
+    # Add a configuration field for each PEFT method.
+    for name, (kls, _) in methods.items():
+        fields.append((name, kls, field(default_factory=kls)))
+
+    config_kls = make_dataclass("_DynamicPeftConfig", fields, bases=(PeftConfig,))
+
+    return cast(PeftConfig, config_kls())
 
 
 instruction_finetune_presets = ConfigRegistry[InstructionFinetuneConfig]()
@@ -294,6 +342,10 @@ def load_instruction_finetuner(
     checkpoint_manager.save_model_metadata(
         base_asset=model_card.name, family=model.family
     )
+
+    # Apply parameter-efficient fine-tuning if requested.
+    if config.peft.method is not None:
+        model = apply_peft(model, config.peft.method, config.peft.get_config())
 
     dp_model = to_data_parallel(
         model,
