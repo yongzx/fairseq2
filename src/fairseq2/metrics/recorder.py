@@ -74,6 +74,8 @@ _metric_formatters: Dict[str, Tuple[str, int, Callable[[Any], str]]] = {
     "total_num_elements":        ("Total Number of Elements",        930, format_as_int),
     "total_num_source_elements": ("Total Number of Source Elements", 930, format_as_int),
     "total_num_target_elements": ("Total Number of Target Elements", 930, format_as_int),
+    "average_mask_ratio":        ("Average Mask Ratio",              950, format_as_float),
+    "average_mask_length":       ("Average Mask Length",             960, format_as_float),
     # fmt: on
 }
 

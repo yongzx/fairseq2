@@ -35,7 +35,9 @@ class AccuracyMetric(Metric[Tensor]):
 
     @override
     @torch.inference_mode()
-    def update(self, correct_preds: Union[int, Tensor], total_preds: int) -> Self:
+    def update(
+        self, correct_preds: Union[int, Tensor], total_preds: Union[int, Tensor]
+    ) -> Self:
         """
         :param correct_preds:
             The number of correct predictions.

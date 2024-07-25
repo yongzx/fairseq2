@@ -355,6 +355,8 @@ class Wav2Vec2TrainUnit(AbstractTrainUnit[Tensor]):
 
         self._metric_bag.update_batch_metrics(input_batch, num_targets)
 
+        self._metric_bag.update_mask_metrics(output.temporal_mask)
+
         return loss.total, num_targets
 
     def _forward(self, batch: SequenceBatch) -> Wav2Vec2Output:

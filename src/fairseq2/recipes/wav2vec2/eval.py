@@ -6,21 +6,160 @@
 
 from __future__ import annotations
 
-from typing import Optional, TextIO, final
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Optional, TextIO, Union, final
 
+import torch
 from torch import Tensor
 from torch.nn import Module
 
+from fairseq2.assets import default_asset_store
+from fairseq2.assets.utils import retrieve_asset_card
+from fairseq2.checkpoint import CheckpointModelMetadataProvider
+from fairseq2.config_registry import ConfigRegistry
+from fairseq2.datasets.speech import load_speech_dataset
 from fairseq2.gang import Gang
 from fairseq2.logging import get_log_writer
 from fairseq2.models.sequence import SequenceBatch
-from fairseq2.models.wav2vec2 import Wav2Vec2Model, Wav2Vec2Output
-from fairseq2.recipes.evaluator import AbstractEvalUnit
-from fairseq2.recipes.utils.setup import check_model_type
+from fairseq2.models.wav2vec2 import Wav2Vec2Model, Wav2Vec2Output, load_wav2vec2_model
+from fairseq2.nn.utils.module import remove_parametrizations
+from fairseq2.recipes.evaluator import AbstractEvalUnit, Evaluator
+from fairseq2.recipes.utils.log import log_model
+from fairseq2.recipes.utils.setup import (
+    broadcast_model,
+    check_model_type,
+    setup_root_gang,
+)
 from fairseq2.recipes.wav2vec2.common import Wav2Vec2MetricBag
-from fairseq2.typing import override
+from fairseq2.typing import META, DataType, override
+from fairseq2.utils.profiler import Stopwatch
 
 log = get_log_writer(__name__)
+
+
+@dataclass
+class Wav2Vec2EvalConfig:
+    """Holds the evaluation configuration of a wav2vec 2.0 model."""
+
+    # Data
+    dataset: Union[str, Path] = "librispeech_960h"
+    """The name or path to the asset card of the dataset to evaluate with."""
+
+    split: str = "valid"
+    """The name of the dataset split to evaluate with."""
+
+    min_audio_len: int = 32_000
+    """The minimum audio sequence length."""
+
+    max_audio_len: int = 250_000
+    """The maximum audio sequence length."""
+
+    max_num_elements: int = 1_500_000
+    """The maximum number of elements per batch."""
+
+    normalize_audio: bool = False
+    """If ``True``, normalizes audio to have zero mean and unit variance."""
+
+    num_prefetch: int = 4
+    """The number of batches to prefetch in background."""
+
+    # Model
+    model: Union[str, Path] = "wav2vec2_base"
+    """The name or path to the asset card of the wav2vec 2.0 model to evaluate."""
+
+    checkpoint_dir: Optional[Path] = None
+    """The checkpoint directory containing models saved by :class:`FileCheckpointManager`."""
+
+    dtype: DataType = torch.float16
+    """The data type of the model."""
+
+    # Misc
+    seed: int = 2
+    """The random number generator seed to use."""
+
+
+wav2vec2_eval_presets = ConfigRegistry[Wav2Vec2EvalConfig]()
+
+wav2vec2_eval_preset = wav2vec2_eval_presets.decorator
+
+
+@wav2vec2_eval_preset("base_ls960h")
+def _base_ls960h() -> Wav2Vec2EvalConfig:
+    config = Wav2Vec2EvalConfig()
+    config.model = "wav2vec2_base_fs1_50k"
+    return config
+
+
+def load_wav2vec2_evaluator(
+    config: Wav2Vec2EvalConfig, output_dir: Path
+) -> Evaluator[Tensor]:
+    """Load an :class:`Evaluator` for wav2vec 2.0 model evaluation."""
+    wall_watch = Stopwatch(start=True)
+
+    if config.checkpoint_dir is not None:
+        default_asset_store.metadata_providers.append(
+            CheckpointModelMetadataProvider(config.checkpoint_dir)
+        )
+
+    gang = setup_root_gang(log)
+
+    # Load the dataset.
+    dataset_card = retrieve_asset_card(config.dataset)
+
+    log.info("Loading {} speech dataset.", dataset_card.name)
+
+    dataset = load_speech_dataset(dataset_card)
+
+    log.info("Dataset loaded.")
+
+    model_card = retrieve_asset_card(config.model)
+
+    # Load the model.
+    log.info("Loading {} model on rank 0.", model_card.name)
+
+    if gang.rank == 0:
+        init_device = gang.device
+    else:
+        init_device = META
+
+    model = load_wav2vec2_model(model_card, device=init_device, dtype=config.dtype)
+
+    gang.barrier()
+
+    log.info("Model loaded on rank 0.")
+
+    remove_parametrizations(model)
+
+    # Distribute the model to all processes in the gang.
+    if gang.size != 1:
+        broadcast_model(model, gang, log)
+
+    log_model(model, log)
+
+    # Initialize the evaluation unit.
+    unit = Wav2Vec2EvalUnit(model, gang)
+
+    data_reader = dataset.create_reader(
+        config.split,
+        gang,
+        dtype=config.dtype,
+        min_audio_len=config.min_audio_len,
+        max_audio_len=config.max_audio_len,
+        max_num_elements=config.max_num_elements,
+        normalize_audio=config.normalize_audio,
+        num_prefetch=config.num_prefetch,
+        seed=config.seed,
+    )
+
+    # Initialize the evaluator.
+    return Evaluator[Tensor](
+        units=[unit],
+        data_readers=[data_reader],
+        root_gang=gang,
+        seed=config.seed,
+        wall_watch=wall_watch,
+    )
 
 
 @final
@@ -67,6 +206,8 @@ class Wav2Vec2EvalUnit(AbstractEvalUnit[Tensor]):
         self._metric_bag.update_quantizer_metrics(output.quantizer_output)
 
         self._metric_bag.update_batch_metrics(input_batch, num_targets)
+
+        self._metric_bag.update_mask_metrics(output.temporal_mask)
 
     def _forward(self, batch: SequenceBatch) -> Wav2Vec2Output:
         return self._model(batch)  # type: ignore[no-any-return]

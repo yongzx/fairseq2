@@ -18,6 +18,7 @@ from fairseq2.metrics.aggregation import Mean, Sum
 from fairseq2.models.sequence import SequenceBatch
 from fairseq2.models.wav2vec2 import Wav2Vec2Loss
 from fairseq2.models.wav2vec2.vector_quantizer import GumbelVectorQuantizerOutput
+from fairseq2.nn.utils.mask import get_num_masks
 
 
 class Wav2Vec2MetricBag(MetricBag):
@@ -39,6 +40,8 @@ class Wav2Vec2MetricBag(MetricBag):
     _total_num_examples: Sum
     _total_num_source_elements: Sum
     _total_num_target_elements: Sum
+    _average_mask_ratio: AccuracyMetric
+    _average_mask_length: AccuracyMetric
 
     def __init__(self, gang: Gang) -> None:
         """
@@ -78,6 +81,13 @@ class Wav2Vec2MetricBag(MetricBag):
 
         self._total_num_source_elements = Sum(device=d)
         self._total_num_target_elements = Sum(device=d)
+
+        self.register_metric(
+            "_average_mask_ratio", AccuracyMetric(device=d), persistent=False
+        )
+        self.register_metric(
+            "_average_mask_length", AccuracyMetric(device=d), persistent=False
+        )
 
     @torch.inference_mode()
     def update_losses(self, loss: Wav2Vec2Loss, num_targets: int) -> None:
@@ -157,3 +167,11 @@ class Wav2Vec2MetricBag(MetricBag):
 
         self._total_num_source_elements.update(num_source_elements)
         self._total_num_target_elements.update(num_targets)
+
+    @torch.inference_mode()
+    def update_mask_metrics(self, mask: Tensor) -> None:
+        bsz, seq_len = mask.shape
+        num_masks = get_num_masks(mask)
+
+        self._average_mask_ratio.update(mask.sum(), mask.numel())
+        self._average_mask_length.update(mask.sum(), num_masks)
