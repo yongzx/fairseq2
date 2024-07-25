@@ -100,7 +100,6 @@ load_speech_dataset = DelegatingDatasetLoader[SpeechDataset]()
 npc = 10
 
 
-# TODO: Work in progress!
 @final
 class GenericSpeechDataset(SpeechDataset):
     """Represents a generic manifest-based Speech dataset."""
@@ -155,33 +154,25 @@ class GenericSpeechDataset(SpeechDataset):
 
         root_data_dir = self._retrieve_data_directory(split)
 
-        builder = self._builder_from_manifest(split, max_audio_len)
+        builder = self._builder_from_manifest(split, min_audio_len)
 
-        # TODO: Remove this, which is done just to get parity with fairseq1's dataloader.
-        def reorder_as_per_fairseq1(
+        def reorder_manifest(
             builder: DataPipelineBuilder,
         ) -> DataPipelineBuilder:
             manifest = list(builder.and_return())
-            manifest = list(
-                filter(
-                    lambda sample: int(sample["audio_size"]) >= min_audio_len, manifest
-                )
-            )
-            sizes = np.array([int(sample["audio_size"]) for sample in manifest])
+            sizes = np.array([sample["audio_size"] for sample in manifest])
             random_order = np.random.permutation(len(sizes))
-            limited_sizes = np.minimum(sizes, max_audio_len)
-            indices = np.lexsort((random_order, limited_sizes))[::-1]
+            capped_sizes = np.minimum(sizes, max_audio_len)
+            indices = np.lexsort((random_order, capped_sizes))[::-1]
             sorted_manifest = [manifest[idx] for idx in indices]
             return read_sequence(sorted_manifest)
 
-        builder = reorder_as_per_fairseq1(builder)
+        builder = reorder_manifest(builder)
 
-        # TODO: Add this back once we remove reorder_as_per_fairseq1.
-        # # Shuffle examples. Must be consistent across all processes.
-        # if example_shuffle_window != 1:
-        #     builder.shuffle(example_shuffle_window, seed)
+        def cap_audio_size(audio_size: int) -> int:
+            return min(max_audio_len, int(audio_size))
 
-        # seed += 1
+        builder.map(cap_audio_size, selector="audio_size")
 
         # Bucket by audio length.
         bucket_sizes = create_bucket_sizes(
@@ -219,8 +210,6 @@ class GenericSpeechDataset(SpeechDataset):
         audio_decoder = AudioDecoder(dtype=torch.float32 if normalize_audio else dtype)
 
         builder.map(audio_decoder, selector="[*].audio.data")
-
-        # TODO(balioglu): Check/adjust sample size
 
         # Normalize audio if requested.
         def normalize(waveform: Tensor) -> Tensor:
@@ -296,7 +285,7 @@ class GenericSpeechDataset(SpeechDataset):
             )
 
     def _builder_from_manifest(
-        self, split: str, max_audio_len: int
+        self, split: str, min_audio_len: int
     ) -> DataPipelineBuilder:
         tsv_file = self._manifest_dir.joinpath(f"{split}.tsv")
 
@@ -308,12 +297,10 @@ class GenericSpeechDataset(SpeechDataset):
 
         builder.map(field_splitter, num_parallel_calls=npc)
 
-        # Manually change "audio_size" to audios longer than max_audio_len to max_audio_len.
-        # This is done so that we can create buckets without error. We will anyway crop these audios.
-        def cap_audio_size(audio_size: str) -> int:
-            return min(max_audio_len, int(audio_size))
+        # Cast audio size to integer.
+        builder.map(int, selector="audio_size")
 
-        builder.map(cap_audio_size, selector="audio_size")
+        builder.filter(lambda sample: sample["audio_size"] >= min_audio_len)
 
         return builder
 
