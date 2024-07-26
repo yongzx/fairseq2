@@ -19,6 +19,7 @@ from typing import (
     Sequence,
     Tuple,
     TypedDict,
+    TypeVar,
     Union,
     final,
 )
@@ -141,16 +142,20 @@ if TYPE_CHECKING or DOC_MODE:
 
         @staticmethod
         def round_robin(
-            pipelines: Sequence[DataPipeline], stop_at_shortest: bool = False
+            pipelines: Sequence[DataPipeline],
+            stop_at_shortest: bool = False,
+            allow_repeats: bool = True,
         ) -> DataPipelineBuilder:
             """Extract examples from ``pipelines`` in round robin.
 
             :param pipelines:
                 The data pipelines to round robin.
             :param stop_at_shortest:
-                If ``True``, stop round_robin when first pipeline reaches its end.
-                If ``False``, circle around finished pipelines until all pipelines
+                If ``True``, stops round_robin when first pipeline reaches its end.
+            :param allow_repeats:
+                If ``True``, circles around finished pipelines until all pipelines
                 reach their end.
+                If ``False``, does not repeat pipelines that have reached their end.
             """
 
         @staticmethod
@@ -158,6 +163,7 @@ if TYPE_CHECKING or DOC_MODE:
             pipelines: Sequence[DataPipeline],
             weights: Optional[Sequence[float]] = None,
             seed: Optional[int] = None,
+            allow_repeats: bool = True,
         ) -> DataPipelineBuilder:
             """Extract examples from ``pipelines`` by sampling based on
             ``weights``. Circles around pipelines until all have reached their
@@ -167,6 +173,10 @@ if TYPE_CHECKING or DOC_MODE:
                 The data pipelines to sample from.
             :param weights:
                 Desired distribution of pipelines. If ``None``, use uniform distribution.
+            :param allow_repeats:
+                If ``True``, circles around finished pipelines until all pipelines
+                reach their end.
+                If ``False``, does not repeat pipelines that have reached their end.
             """
 
         @staticmethod
@@ -229,6 +239,35 @@ if TYPE_CHECKING or DOC_MODE:
 
             This is equivalent to calling `.map(Collater())`.
             See :py:class:`fairseq2.data.Collater` for details.
+            """
+
+        def dynamic_bucket(
+            self,
+            threshold: float,
+            cost_fn: Callable[[Any], float],
+            min_num_examples: Optional[int] = None,
+            max_num_examples: Optional[int] = None,
+            drop_remainder: bool = False,
+        ) -> Self:
+            """Combine a number of consecutive examples into a single example
+            based on cumulative cost of examples, as measured by
+            user-provided ``cost_fn``.
+
+            Yields a bucket once the cumulative cost produced by ``cost_fn``
+            meets or exceeds ``threshold``.
+
+            :param threshold:
+                Threshold for cumulative cost to trigger bucketing.
+            :param cost_fn:
+                Cost function that outputs cost for a particular example.
+            :param min_num_examples:
+                Minimum number of examples per bucket.
+            :param max_num_examples:
+                Maximum number of examples per bucket.
+            :param drop_remainder:
+                If ``True``, drops the last bucket in case it has fewer than
+                ``min_num_examples`` examples or the cumulative cost has not reached
+                ``threshold`` yet.
             """
 
         def filter(self, predicate: Callable[[Any], Any]) -> Self:
@@ -356,6 +395,23 @@ if TYPE_CHECKING or DOC_MODE:
     def read_zipped_records(path: Path) -> DataPipelineBuilder:
         """Read each file in a zip archive"""
         ...
+
+    T = TypeVar("T", bound=Iterator[Any])
+
+    def read_iterator(
+        iterator: T,
+        reset_fn: Callable[[T], T],
+        infinite: bool,
+    ) -> DataPipelineBuilder:
+        """Read each element of ``iterator``.
+
+        :param iterator:
+            The iterator to read.
+        :param reset_fn:
+            Function to reset iterator.
+        :param infinite:
+            Whether iterator is infinite or not.
+        """
 
     class CollateOptionsOverride:
         """Overrides how the collater should create batch for a particular column.
@@ -496,6 +552,7 @@ else:
         get_last_failed_example as get_last_failed_example,
     )
     from fairseq2n.bindings.data.data_pipeline import list_files as list_files
+    from fairseq2n.bindings.data.data_pipeline import read_iterator as read_iterator
     from fairseq2n.bindings.data.data_pipeline import read_sequence as read_sequence
     from fairseq2n.bindings.data.data_pipeline import (
         read_zipped_records as read_zipped_records,
@@ -515,6 +572,7 @@ else:
             list_files,
             read_sequence,
             read_zipped_records,
+            read_iterator,
         ]
 
         for t in ctypes:
