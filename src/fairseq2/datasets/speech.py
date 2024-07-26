@@ -14,18 +14,13 @@ from torch import Tensor
 from torch.nn.functional import layer_norm
 
 from fairseq2.assets import AssetCard
-from fairseq2.data import (
-    Collater,
-    DataPipelineBuilder,
-    FileMapper,
-    create_bucket_sizes,
-    read_sequence,
-)
+from fairseq2.data import Collater, DataPipelineBuilder, FileMapper, read_sequence
 from fairseq2.data.audio import AudioDecoder
 from fairseq2.data.text import StrSplitter, read_text
 from fairseq2.datasets.data_reader import DataPipelineReader, DataReader
 from fairseq2.datasets.error import DatasetError
 from fairseq2.datasets.loader import AbstractDatasetLoader, DelegatingDatasetLoader
+from fairseq2.datasets.utils import batch_by_size_fn
 from fairseq2.gang import Gang
 from fairseq2.typing import DataType, override
 
@@ -156,7 +151,7 @@ class GenericSpeechDataset(SpeechDataset):
 
         builder = self._builder_from_manifest(split, min_audio_len)
 
-        def reorder_manifest(
+        def reorder_and_batch_manifest(
             builder: DataPipelineBuilder,
         ) -> DataPipelineBuilder:
             manifest = list(builder.and_return())
@@ -164,31 +159,19 @@ class GenericSpeechDataset(SpeechDataset):
             random_order = np.random.permutation(len(sizes))
             capped_sizes = np.minimum(sizes, max_audio_len)
             indices = np.lexsort((random_order, capped_sizes))[::-1]
-            sorted_manifest = [manifest[idx] for idx in indices]
-            return read_sequence(sorted_manifest)
+            batched_indices = batch_by_size_fn(
+                indices,
+                lambda idx: min(max_audio_len, sizes[idx]),
+                max_num_elements,
+                -1,
+                8,
+            )
+            batched_manifest = [
+                [manifest[idx] for idx in batch] for batch in batched_indices
+            ]
+            return read_sequence(batched_manifest)
 
-        builder = reorder_manifest(builder)
-
-        def cap_audio_size(audio_size: int) -> int:
-            return min(max_audio_len, int(audio_size))
-
-        builder.map(cap_audio_size, selector="audio_size")
-
-        # Bucket by audio length.
-        bucket_sizes = create_bucket_sizes(
-            max_num_elements=max_num_elements,
-            max_seq_len=max_audio_len,
-            min_seq_len=min_audio_len,
-            num_seqs_multiple_of=8,
-        )
-
-        builder.bucket_by_length(
-            bucket_sizes,
-            selector="audio_size",
-            min_data_len=min_audio_len,
-            skip_below_min_examples=True,
-            skip_above_max_examples=True,
-        )
+        builder = reorder_and_batch_manifest(builder)
 
         # Shuffle buckets.
         if batch_shuffle_window != 1:
