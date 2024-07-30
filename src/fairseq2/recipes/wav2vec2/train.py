@@ -26,6 +26,7 @@ from fairseq2.models.wav2vec2 import (
     Wav2Vec2Model,
     Wav2Vec2Output,
     create_wav2vec2_model,
+    load_wav2vec2_model,
     wav2vec2_archs,
 )
 from fairseq2.nn.utils.module import to_device
@@ -94,6 +95,8 @@ class Wav2Vec2TrainConfig:
     model_config: Optional[Dict[str, Any]] = None
     """The model configuration overrides."""
 
+    finetune_from_model: Optional[str] = None
+
     dtype: DataType = torch.float16
     """The data type of the model."""
 
@@ -138,7 +141,7 @@ class Wav2Vec2TrainConfig:
     max_num_data_epochs: Optional[int] = None
     """The maximum number of data epochs to train for."""
 
-    validate_every_n_steps: int = 10_000
+    validate_every_n_steps: int = 5_000
     """The step interval at which to validate the model."""
 
     checkpoint_every_n_steps: int = 25_000
@@ -173,6 +176,31 @@ def _base_960h() -> Wav2Vec2TrainConfig:
     return config
 
 
+@wav2vec2_train_preset("base_960h_fs1_masking")
+def _base_960h_fs1_masking() -> Wav2Vec2TrainConfig:
+    config = Wav2Vec2TrainConfig()
+    config.model_config = {
+        "encoder_config": {"first_pass_dropout_p": 0.1},
+        "max_temporal_mask_prob": 0.65,
+        "mask_codebase": "fairseq1",
+    }
+    return config
+
+
+@wav2vec2_train_preset("base_960h_fs1_masking_5epoch")
+def _base_960h_fs1_masking_5epoch() -> Wav2Vec2TrainConfig:
+    config = Wav2Vec2TrainConfig()
+    config.model_config = {
+        "encoder_config": {"first_pass_dropout_p": 0.1},
+        "max_temporal_mask_prob": 0.65,
+        "mask_codebase": "fairseq1",
+    }
+    config.validate_every_n_steps = 50
+    config.publish_metrics_every_n_steps = 10
+    config.max_num_data_epochs = 5
+    return config
+
+
 def load_wav2vec2_trainer(
     config: Wav2Vec2TrainConfig, output_dir: Path
 ) -> Trainer[Tensor]:
@@ -204,7 +232,13 @@ def load_wav2vec2_trainer(
     log_model_config(model_config, log)
 
     # Initialize the model.
-    model = create_wav2vec2_model(model_config, device=META, dtype=torch.float32)
+    if config.finetune_from_model:
+        log.info("Finetuning from asset {}", config.finetune_from_model)
+        model = load_wav2vec2_model(
+            config.finetune_from_model, device=gang.device, dtype=torch.float32
+        )
+    else:
+        model = create_wav2vec2_model(model_config, device=META, dtype=torch.float32)
 
     checkpoint_manager.save_model_metadata(family=model.family, config=model_config)
 
@@ -212,7 +246,7 @@ def load_wav2vec2_trainer(
 
     # If we don't have a checkpoint, load the model on rank 0 and
     # broadcast it to the gang.
-    if not has_checkpoint:
+    if not has_checkpoint and not config.finetune_from_model:
         if gang.rank == 0:
             to_device(model, gang.device, seed=config.seed)
 
