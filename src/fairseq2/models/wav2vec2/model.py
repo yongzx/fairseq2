@@ -181,7 +181,7 @@ class Wav2Vec2Model(Model):
 
         # We use the extracted features as context network targets after masking
         # and quantization.
-        targets = seqs.detach().clone()
+        targets = seqs.clone()
 
         if frontend.first_pass_dropout is not None:
             targets = frontend.first_pass_dropout(targets)
@@ -405,7 +405,7 @@ class Wav2Vec2Output:
         batch_size, seq_len, num_logits = self.logits.shape
 
         # (N, S, L) -> (S x N, L)
-        logits = self.logits.transpose(0, 1).reshape(-1, num_logits)
+        logits = self.logits.transpose(0, 1).reshape(-1, num_logits).float()
 
         # The target is always at index 0 in the candidate list.
         target_indices = logits.new_zeros((batch_size * seq_len,), dtype=torch.int64)
