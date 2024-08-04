@@ -187,17 +187,21 @@ def _base_960h_fs1_masking() -> Wav2Vec2TrainConfig:
     return config
 
 
-@wav2vec2_train_preset("base_960h_fs1_masking_5epoch")
-def _base_960h_fs1_masking_5epoch() -> Wav2Vec2TrainConfig:
+@wav2vec2_train_preset("large_960h_fs1_masking")
+def _large_960h_fs1_masking() -> Wav2Vec2TrainConfig:
     config = Wav2Vec2TrainConfig()
+    config.model_arch = "large"
     config.model_config = {
         "encoder_config": {"first_pass_dropout_p": 0.1},
         "max_temporal_mask_prob": 0.65,
         "mask_codebase": "fairseq1",
     }
-    config.validate_every_n_steps = 50
-    config.publish_metrics_every_n_steps = 10
-    config.max_num_data_epochs = 5
+    config.publish_metrics_every_n_steps = 100
+    config.max_audio_len = 320_000
+    config.max_num_elements = 1_200_000
+    config.max_num_steps = 250_000
+    config.lr = 3e-04
+    config.warmup_steps = 20_000
     return config
 
 
