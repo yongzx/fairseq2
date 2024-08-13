@@ -189,6 +189,20 @@ def _base_10h() -> Wav2Vec2AsrTrainConfig:
     return Wav2Vec2AsrTrainConfig()
 
 
+@wav2vec2_asr_train_preset("large_10h")
+def _large_10h() -> Wav2Vec2AsrTrainConfig:
+    config = _base_10h()
+
+    config.model_arch = "large_10h"
+    config.pretrained_model = "wav2vec2_large"
+    config.max_audio_len = 640_000
+    config.max_num_elements = 1_280_000
+    config.lr = 0.0001
+    config.gradient_accumulation = 5
+
+    return config
+
+
 @wav2vec2_asr_train_preset("base_100h")
 def _base_100h() -> Wav2Vec2AsrTrainConfig:
     config = _base_10h()
@@ -198,6 +212,22 @@ def _base_100h() -> Wav2Vec2AsrTrainConfig:
     config.lr = 0.00003
     config.max_num_steps = 50_000
     config.freeze_encoder_for_n_steps = 0
+
+    return config
+
+
+@wav2vec2_asr_train_preset("large_100h")
+def _large_100h() -> Wav2Vec2AsrTrainConfig:
+    config = _base_10h()
+
+    config.dataset = "librispeech_asr_100h"
+    config.model_arch = "large_100h"
+    config.pretrained_model = "wav2vec2_large"
+    config.max_audio_len = 640_000
+    config.max_num_elements = 1_280_000
+    config.lr = 0.00003
+    config.gradient_accumulation = 5
+    config.max_num_steps = 50_000
 
     return config
 
