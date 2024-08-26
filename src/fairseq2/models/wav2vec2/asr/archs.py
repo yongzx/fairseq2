@@ -67,6 +67,13 @@ def _large_lv60k_10h() -> Wav2Vec2AsrConfig:
 
     return config
 
+#############################################################################
+@wav2vec2_asr_arch("mms_base_300m_asr")
+def _mms_base_300m_eng_accent() -> Wav2Vec2AsrConfig:
+    config = _large_lv60k_10h()
+
+    return config
+#############################################################################
 
 @wav2vec2_asr_arch("large_lv60k_100h")
 def _large_lv60k_100h() -> Wav2Vec2AsrConfig:

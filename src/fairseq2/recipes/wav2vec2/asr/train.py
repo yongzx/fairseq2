@@ -191,6 +191,12 @@ class Wav2Vec2AsrTrainConfig:
     publish_metrics_every_n_steps: int = 200
     """The step interval at which to publish metrics."""
 
+    score_metric_name : str = "uer"
+    """The validation metric to keep track of."""
+
+    lower_better: bool = True
+    """whether a better model will have a lower score for `score_metric_name`"""
+
     # Checkpoint
     resume_checkpoint_dir: Path | None = None
     """If not ``None``, adds the specified path to the default asset store."""
@@ -236,6 +242,54 @@ def _base_100h() -> Wav2Vec2AsrTrainConfig:
 
     return config
 
+@wav2vec2_asr_train_preset("mms_300m_pristine")
+def _asr_mms_300m_pristine() -> Wav2Vec2AsrTrainConfig:
+    config = _base_10h()
+    assert isinstance(config.optimizer_config, AdamWConfig)
+
+    config.pretrained_model = "wav2vec2_mms_base_300m"
+    asr_model_arch = "mms_base_300m_asr" # FIXME: may need to change
+    config.model_arch = asr_model_arch
+    config.model_config = wav2vec2_asr_archs.get(asr_model_arch, return_empty=True)
+
+    ### dataset
+    config.dataset = "fleurs_en_us_pristine"
+    config.train_split = "train"
+    config.valid_split = "dev"
+    # config.min_audio_len
+    config.max_audio_len = 640_000
+    config.max_num_elements = 1_280_000
+    config.normalize_audio = True
+    # config.example_shuffle_window
+    # config.batch_shuffle_window
+    # config.num_prefetch
+    # config.tokenizer
+    config.dtype = torch.float16
+    # config.data_parellelism
+    # config.fsdp_wrap_granularity
+    # config.torch_compile
+    config.optimizer = "adamw"
+    config.optimizer_config = AdamWConfig(lr=0.000025, betas=(0.9,0.98), eps=1e-08)
+    config.lr_scheduler = 'tri-stage'
+    config.lr_stage_ratios = (0.1, 0.4, 0.5)
+    # config.start_lr_scale
+    config.final_lr_scale = 0.05
+    # config.max_gradient_norm
+    # config.fp16_loss_scale
+    config.gradient_accumulation = 5
+    config.max_num_steps = 10000
+    config.max_num_data_epochs = None
+    config.freeze_encoder_for_n_steps = 0
+    config.validate_after_n_steps = 200
+    config.validate_every_n_steps = 200
+    config.checkpoint_after_n_steps = 1000
+    config.checkpoint_every_n_steps = 200
+    config.keep_best_n_checkpoints = 10  # best score is tracked with `score_metric_name`
+    config.score_metric_name = "uer"
+    config.lower_better = True
+    config.publish_metrics_every_n_steps = 200
+
+    return config
 
 def load_wav2vec2_asr_trainer(
     config: Wav2Vec2AsrTrainConfig, output_dir: Path

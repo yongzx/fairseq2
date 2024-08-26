@@ -49,6 +49,13 @@ def _large_lv60k() -> Wav2Vec2Config:
 
     return config
 
+#########################
+@wav2vec2_arch("mms_base_300m")
+def _mms_300m() -> Wav2Vec2Config:
+    config = _large_lv60k()
+
+    return config
+#########################
 
 @wav2vec2_arch("pseudo_dinosr_base")
 def _pseudo_dinosr_base() -> Wav2Vec2Config:
