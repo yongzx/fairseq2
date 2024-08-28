@@ -4,8 +4,8 @@
 # This source code is licensed under the BSD-style license found in the
 # LICENSE file in the root directory of this source tree.
 
-name: fleurs_en_us_pristine
+name: fleurs_hi_in_pristine
 dataset_family: generic_asr
-tokenizer: "/private/home/yongzx/mms/data/tokenizers/fleurs_en_us_pristine.model"
+tokenizer: "/private/home/yongzx/mms/data/tokenizers/fleurs_hi_in_pristine.model"
 tokenizer_family: fleurs_en_us_pristine
 

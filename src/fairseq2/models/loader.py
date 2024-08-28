@@ -177,6 +177,7 @@ class StandardModelLoader(ModelLoader[ModelT], Generic[ModelT, ModelConfigT]):
         self,
         model_name_or_card: str | AssetCard,
         *,
+        vocab_info, # YONG: UGLY FIXME (right now hard-coded to update final_layer according to vocab)
         gangs: Mapping[str, Gang] | None = None,
         device: Device | None = None,
         dtype: DataType | None = None,
@@ -227,6 +228,7 @@ class StandardModelLoader(ModelLoader[ModelT], Generic[ModelT, ModelConfigT]):
         model = None
 
         config = self._config_loader(card)
+        config.vocab_info = vocab_info # YONG: UGLY FIXME (right now hard-coded to update final_layer according to vocab)
 
         if device.type == "meta":
             try:
@@ -362,6 +364,7 @@ class DelegatingModelLoader(ModelLoader[ModelT]):
         self,
         model_name_or_card: str | AssetCard,
         *,
+        vocab_info, # YONG: UGLY FIXME (right now hard-coded to update final_layer according to vocab)
         gangs: Mapping[str, Gang] | None = None,
         device: Device | None = None,
         dtype: DataType | None = None,
@@ -384,6 +387,7 @@ class DelegatingModelLoader(ModelLoader[ModelT]):
 
         return loader(
             model_name_or_card,
+            vocab_info=vocab_info,
             gangs=gangs,
             device=device,
             dtype=dtype,

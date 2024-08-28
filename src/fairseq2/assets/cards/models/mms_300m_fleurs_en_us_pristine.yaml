@@ -1,0 +1,5 @@
+name: mms_300m_en_us_pristine
+model_family: wav2vec2_asr
+model_arch: mms_base_300m_asr
+checkpoint: "/checkpoint/yongzx/wav2vec2_asr/train_fleurs_en_us_pristine/preset_mms_300m_en_us_pristine.ws_4/checkpoints/step_7000/model.pt"
+tokenizer_ref: fleurs_en_us_pristine

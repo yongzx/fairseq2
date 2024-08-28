@@ -86,7 +86,7 @@ class WerMetric(Metric[tuple[Tensor, Tensor]]):
             ref_units = ref_seq[:ref_seq_len]
             hyp_units = hyp_seq[:hyp_seq_len]
 
-            unit_err = editdistance.eval(hyp_units, ref_units)
+            unit_err = editdistance.eval(hyp_units.tolist(), ref_units.tolist())
             word_err = editdistance.eval(hyp_words, ref_words)
 
             self.unit_err += unit_err

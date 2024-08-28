@@ -68,6 +68,16 @@ def convert_wav2vec2_checkpoint(
         r"^quantizer\.weight_proj\.":                         r"quantizer.entry_proj.",
         r"^project_q\.":                                      r"final_target_proj.",
         # fmt: on
+
+        ######### added myself for bugs with mms-300m
+        # # RuntimeError: Error(s) in loading state_dict for Wav2Vec2Model:                                                               
+        #                              Missing key(s) in state_dict: "encoder_frontend.pos_encoder.conv.bias", "encoder_frontend.pos_encoder.conv.weight_g", 
+        #                      "encoder_frontend.pos_encoder.conv.weight_v".                                                                                 
+        #                              Unexpected key(s) in state_dict: "encoder.pos_conv.0.bias", "encoder.pos_conv.0.weight_g",                            
+        #                      "encoder.pos_conv.0.weight_v".
+        r"^encoder\.pos_conv\.0\.weight_v":  r"encoder_frontend.pos_encoder.conv.weight_v",
+        r"^encoder\.pos_conv\.0\.weight_g":  r"encoder_frontend.pos_encoder.conv.weight_g",
+        r"^encoder\.pos_conv\.0\.bias" : r"encoder_frontend.pos_encoder.conv.bias",
     }
 
     return convert_fairseq_checkpoint(checkpoint, key_map)

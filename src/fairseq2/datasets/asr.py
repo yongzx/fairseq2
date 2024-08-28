@@ -396,3 +396,9 @@ load_asr_dataset.register("generic_asr", load_generic_asr_dataset)
 load_librispeech_asr_tokenizer = default_raw_sentencepiece_tokenizer_loader
 
 load_text_tokenizer.register("librispeech_asr", load_librispeech_asr_tokenizer)
+
+
+############# add tokenizer ##############
+load_fleurs_en_asr_tokenizer = default_raw_sentencepiece_tokenizer_loader
+
+load_text_tokenizer.register("fleurs_en_us_pristine", load_fleurs_en_asr_tokenizer)

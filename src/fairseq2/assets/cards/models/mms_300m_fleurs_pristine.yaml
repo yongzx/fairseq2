@@ -1,0 +1,5 @@
+name: mms_300m_pristine
+model_family: wav2vec2_asr
+model_arch: mms_base_300m_asr
+checkpoint: "/private/home/yongzx/mms/data/processed/021-vineel/checkpoints/step_8800/model.pt"
+tokenizer_ref: librispeech_asr

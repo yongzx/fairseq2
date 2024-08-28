@@ -98,6 +98,31 @@ wav2vec2_asr_eval_preset = wav2vec2_asr_eval_presets.decorator
 def _base_10h() -> Wav2Vec2AsrEvalConfig:
     return Wav2Vec2AsrEvalConfig()
 
+#########
+MODEL_NAME = "mms_300m_pristine"
+TOKENIZER = "librispeech_asr"
+@wav2vec2_asr_eval_preset("test_fleurs_en_us_pristine")
+def _test_fleurs_en_us_pristine() -> Wav2Vec2AsrEvalConfig:
+    config = Wav2Vec2AsrEvalConfig()
+    config.normalize_audio = True
+    config.dataset = "fleurs_en_us_pristine"
+    config.split = "test"
+    config.tokenizer_name = TOKENIZER # "fleurs_en_us_pristine"
+    config.model = MODEL_NAME
+    return config
+
+@wav2vec2_asr_eval_preset("test_fleurs_hi_in_pristine")
+def _test_fleurs_hi_in_pristine() -> Wav2Vec2AsrEvalConfig:
+    config = Wav2Vec2AsrEvalConfig()
+    config.normalize_audio = True
+    config.dataset = "fleurs_hi_in_pristine"
+    config.split = "test"
+    config.model = MODEL_NAME
+    config.tokenizer_name = "fleurs_hi_in_pristine"
+    return config
+
+#############
+
 
 def load_wav2vec2_asr_evaluator(
     config: Wav2Vec2AsrEvalConfig, output_dir: Path
@@ -118,12 +143,19 @@ def load_wav2vec2_asr_evaluator(
 
     model_card = retrieve_asset_card(config.model)
 
-    # Load the tokenizer.
-    log.info("Loading {} tokenizer.", model_card.name)
+    # Load the tokenizer (change the config.tokenizer_name)
+    log.info("Loading {} tokenizer.", config.tokenizer_name)
 
-    tokenizer = load_text_tokenizer(model_card)
+    tokenizer = load_text_tokenizer(config.tokenizer_name)
+    log.info("Tokenizer loaded.")
+    log.info("Vocab: {}", str(tokenizer.vocab_info))
 
     log.info("Tokenizer loaded.")
+
+    # Set up output_dir
+    output_dir = output_dir / model_card.name
+    output_dir.mkdir(parents=True, exist_ok=True)
+    log.info(f"output_dir ===> {str(output_dir)}")
 
     # Load the dataset.
     try:
@@ -151,7 +183,8 @@ def load_wav2vec2_asr_evaluator(
         init_device = META
 
     try:
-        model = load_model(model_card, device=init_device, dtype=config.dtype)
+        # YONG: UGLY FIXME (right now hard-coded `vocab_info`` to update final_layer according to vocab)
+        model = load_model(model_card, vocab_info=tokenizer.vocab_info, device=init_device, dtype=config.dtype)
     except ValueError as ex:
         raise ValueError(
             "The model cannot be initialized. See nested exception for details."
@@ -177,7 +210,10 @@ def load_wav2vec2_asr_evaluator(
     # Initialize the evaluation unit.
     ref_output_file = output_dir.joinpath(f"transcriptions/rank_{gang.rank}.ref.txt")
     hyp_output_file = output_dir.joinpath(f"transcriptions/rank_{gang.rank}.hyp.txt")
-
+    
+    print(f">>>> OUT (REF) >>>>>>>>> {str(ref_output_file)}")
+    print(f">>>> OUT (HYP) >>>>>>>>> {str(hyp_output_file)}")
+    
     try:
         ref_output_file.parent.mkdir(parents=True, exist_ok=True)
     except OSError as ex:

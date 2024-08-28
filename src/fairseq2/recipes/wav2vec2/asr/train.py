@@ -242,15 +242,16 @@ def _base_100h() -> Wav2Vec2AsrTrainConfig:
 
     return config
 
-@wav2vec2_asr_train_preset("mms_300m_pristine")
-def _asr_mms_300m_pristine() -> Wav2Vec2AsrTrainConfig:
+##################################
+@wav2vec2_asr_train_preset("mms_300m_en_us_pristine")
+def _asr_mms_300m_en_us_pristine() -> Wav2Vec2AsrTrainConfig:
     config = _base_10h()
     assert isinstance(config.optimizer_config, AdamWConfig)
 
     config.pretrained_model = "wav2vec2_mms_base_300m"
-    asr_model_arch = "mms_base_300m_asr" # FIXME: may need to change
-    config.model_arch = asr_model_arch
-    config.model_config = wav2vec2_asr_archs.get(asr_model_arch, return_empty=True)
+    asr_model_arch_name = "mms_base_300m_asr"
+    config.model_arch = asr_model_arch_name
+    config.model_config = wav2vec2_asr_archs.get(asr_model_arch_name, return_empty=True)
 
     ### dataset
     config.dataset = "fleurs_en_us_pristine"
@@ -263,7 +264,9 @@ def _asr_mms_300m_pristine() -> Wav2Vec2AsrTrainConfig:
     # config.example_shuffle_window
     # config.batch_shuffle_window
     # config.num_prefetch
-    # config.tokenizer
+    config.tokenizer = "fleurs_en_us_pristine"
+    _tokenizer = load_text_tokenizer(config.tokenizer)
+    config.model_config.vocab_info = _tokenizer.vocab_info # FIXME: WONKY because the vocab config is currently hardcoded
     config.dtype = torch.float16
     # config.data_parellelism
     # config.fsdp_wrap_granularity
@@ -290,6 +293,17 @@ def _asr_mms_300m_pristine() -> Wav2Vec2AsrTrainConfig:
     config.publish_metrics_every_n_steps = 200
 
     return config
+
+@wav2vec2_asr_train_preset("mms_300m_hi_in_pristine")
+def _asr_mms_300m_hi_in_pristine() -> Wav2Vec2AsrTrainConfig:
+    config = _asr_mms_300m_en_us_pristine()
+    config.dataset = "fleurs_hi_in_pristine"
+    config.tokenizer = "fleurs_hi_in_pristine"
+    _tokenizer = load_text_tokenizer(config.tokenizer)
+    config.model_config.vocab_info = _tokenizer.vocab_info
+    return config
+
+####################################
 
 def load_wav2vec2_asr_trainer(
     config: Wav2Vec2AsrTrainConfig, output_dir: Path
@@ -320,6 +334,7 @@ def load_wav2vec2_asr_trainer(
     tokenizer = load_text_tokenizer(tokenizer_card)
 
     log.info("Tokenizer loaded.")
+    log.info("Vocab: {}", str(tokenizer.vocab_info))
 
     # Load the dataset.
     try:
@@ -507,7 +522,7 @@ def load_wav2vec2_asr_trainer(
         max_gradient_norm=config.max_gradient_norm,
         max_num_steps=config.max_num_steps,
         max_num_data_epochs=config.max_num_data_epochs,
-        score_metric_name="wer",
+        score_metric_name=config.score_metric_name,
         lower_better=True,
         valid_units=[valid_unit],
         valid_data_readers=[valid_data_reader],
