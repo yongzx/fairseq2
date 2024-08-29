@@ -86,8 +86,8 @@ def _mms_base_300m_eng_accent() -> Wav2Vec2AsrConfig:
     #   conv_pos_groups: 16
     #   cross_sample_negatives: 0
     #   dropout: 0.0
-    #   dropout_features: 0.0
-    #   dropout_input: 0.0
+    #   dropout_features: 0.0 # (dropout to apply to the features (after feat extr))
+    #   dropout_input: 0.0 # (dropout to apply to the input (after feat extr))
     #   encoder_attention_heads: 16
     #   encoder_embed_dim: 1024
     #   encoder_ffn_embed_dim: 4096
@@ -110,7 +110,7 @@ def _mms_base_300m_eng_accent() -> Wav2Vec2AsrConfig:
     #   mask_channel_other: 0.0
     #   mask_channel_prob: 0.0
     #   mask_channel_selection: static
-    #   mask_length: 10
+    #   mask_length: 10  # ("mask length")
     #   mask_min_space: 1
     #   mask_other: 0.0
     #   mask_prob: 0.65
@@ -138,14 +138,17 @@ def _mms_base_300m_eng_accent() -> Wav2Vec2AsrConfig:
     #   feature_grad_mult: 0.0
     #   freeze_finetune_updates: 0  # --> recipe 
 
+    config.encoder_config.first_pass_dropout_p = 0.0 # dropout_features
+    config.encoder_config.layer_norm_features = True # extractor_mode: layer_norm
     config.encoder_config.feature_gradient_scale = 0.0 # feature_grad_mult
     config.encoder_config.dropout_p = 0.0 # dropout
     config.encoder_config.attn_dropout_p = 0.0  # attention_dropout
     config.encoder_config.ffn_inner_dropout_p = 0.1  # activation_dropout
     config.encoder_config.layer_drop_p = 0.1  # layerdrop
     config.max_temporal_mask_prob = 0.3  # mask_prob
-    config.temporal_mask_span_len = 5 # mask_channel_length (?)
+    config.temporal_mask_span_len = 0.3  # mask_length
     config.max_spatial_mask_prob = 0 # mask_channel_prob
+    config.spatial_mask_span_len = 5 # mask_channel_length (?)
 
     return config
 #############################################################################
